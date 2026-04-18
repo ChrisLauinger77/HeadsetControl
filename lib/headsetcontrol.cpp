@@ -296,6 +296,11 @@ uint8_t Headset::getEqualizerPresetsCount() const
     return impl_->device()->getEqualizerPresetsCount();
 }
 
+std::optional<EqualizerPresets> Headset::getEqualizerPresets() const
+{
+    return impl_->device()->getEqualizerPresets();
+}
+
 Result<MicVolumeResult> Headset::setMicVolume(uint8_t volume)
 {
     HEADSET_FEATURE_IMPL(CAP_MICROPHONE_VOLUME, setMicVolume, volume);

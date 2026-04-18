@@ -15,6 +15,7 @@
 #include "headsetcontrol_c.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -331,6 +332,15 @@ void testCppTestDeviceMode()
             // Test equalizer presets count
             ASSERT_EQ(4, headset.getEqualizerPresetsCount(), "Should have 4 presets");
 
+            auto presets = headset.getEqualizerPresets();
+            ASSERT_TRUE(presets.has_value(), "Equalizer presets should be available");
+            ASSERT_EQ(4, presets->count(), "Should return 4 equalizer presets");
+            ASSERT_EQ(std::string("Flat"), presets->presets[0].name, "First preset name should match");
+            ASSERT_EQ(10u, presets->presets[0].values.size(), "Flat preset should have 10 bands");
+            ASSERT_EQ(0.0f, presets->presets[0].values[0], "Flat preset first band should be 0");
+            ASSERT_EQ(std::string("Bass Boost"), presets->presets[1].name, "Second preset name should match");
+            ASSERT_EQ(6.0f, presets->presets[1].values[0], "Bass Boost first band should match");
+
             // Test equalizer preset
             ASSERT_TRUE(headset.supports(CAP_EQUALIZER_PRESET), "Test device should support equalizer preset");
             auto eq_preset = headset.setEqualizerPreset(2);
@@ -420,6 +430,17 @@ void testCTestDeviceMode()
             hsc_sidetone_t sidetone;
             ASSERT_EQ(HSC_RESULT_OK, hsc_set_sidetone(headsets[i], 64, &sidetone), "Sidetone should succeed");
             ASSERT_EQ(64, sidetone.current_level, "Sidetone level should be 64");
+
+            ASSERT_EQ(4, hsc_get_equalizer_presets_count(headsets[i]), "Preset count should be 4");
+            ASSERT_EQ(std::string("Flat"), std::string(hsc_get_equalizer_preset_name(headsets[i], 0)), "Flat preset name should match");
+            ASSERT_EQ(10, hsc_get_equalizer_preset_band_count(headsets[i], 0), "Flat preset should have 10 bands");
+
+            std::array<float, 10> preset_bands {};
+            ASSERT_EQ(HSC_RESULT_OK,
+                hsc_get_equalizer_preset_bands(headsets[i], 1, preset_bands.data(), static_cast<int>(preset_bands.size())),
+                "Fetching preset bands should succeed");
+            ASSERT_EQ(6.0f, preset_bands[0], "Bass Boost first band should match");
+            ASSERT_EQ(4.0f, preset_bands[1], "Bass Boost second band should match");
 
             break;
         }
@@ -549,6 +570,67 @@ void testVendorProductNames()
     std::cout << "    OK vendor/product name accessors" << std::endl;
 }
 
+void testEqualizerPresetConsistency()
+{
+    std::cout << "  Testing equalizer preset consistency between C++ and C APIs..." << std::endl;
+
+    headsetcontrol::enableTestDevice(true);
+
+    auto cpp_headsets = headsetcontrol::discover();
+    hsc_headset_t* c_headsets = nullptr;
+    int c_count               = hsc_discover(&c_headsets);
+
+    Headset* cpp_test_device = nullptr;
+    for (auto& headset : cpp_headsets) {
+        if (headset.vendorId() == 0xF00B && headset.productId() == 0xA00C) {
+            cpp_test_device = &headset;
+            break;
+        }
+    }
+
+    hsc_headset_t c_test_device = nullptr;
+    for (int i = 0; i < c_count; i++) {
+        if (hsc_get_vendor_id(c_headsets[i]) == 0xF00B && hsc_get_product_id(c_headsets[i]) == 0xA00C) {
+            c_test_device = c_headsets[i];
+            break;
+        }
+    }
+
+    ASSERT_TRUE(cpp_test_device != nullptr, "Should find C++ test device");
+    ASSERT_TRUE(c_test_device != nullptr, "Should find C test device");
+
+    auto cpp_presets = cpp_test_device->getEqualizerPresets();
+    ASSERT_TRUE(cpp_presets.has_value(), "C++ equalizer presets should be available");
+    ASSERT_EQ(cpp_test_device->getEqualizerPresetsCount(), hsc_get_equalizer_presets_count(c_test_device),
+        "Preset counts should match");
+
+    for (int preset_index = 0; preset_index < cpp_presets->count(); preset_index++) {
+        const auto& cpp_preset = cpp_presets->presets[static_cast<size_t>(preset_index)];
+        ASSERT_EQ(cpp_preset.name, std::string(hsc_get_equalizer_preset_name(c_test_device, preset_index)),
+            "Preset names should match");
+        ASSERT_EQ(static_cast<int>(cpp_preset.values.size()), hsc_get_equalizer_preset_band_count(c_test_device, preset_index),
+            "Preset band counts should match");
+
+        std::vector<float> c_values(cpp_preset.values.size());
+        ASSERT_EQ(HSC_RESULT_OK,
+            hsc_get_equalizer_preset_bands(c_test_device, preset_index, c_values.data(), static_cast<int>(c_values.size())),
+            "Preset bands fetch should succeed");
+        ASSERT_TRUE(c_values == cpp_preset.values, "Preset bands should match");
+    }
+
+    ASSERT_TRUE(hsc_get_equalizer_preset_name(c_test_device, -1) == nullptr, "Negative preset index should return null");
+    ASSERT_EQ(0, hsc_get_equalizer_preset_band_count(c_test_device, 999), "Out-of-range preset band count should be 0");
+    std::array<float, 2> short_buffer {};
+    ASSERT_EQ(HSC_RESULT_INVALID_PARAM,
+        hsc_get_equalizer_preset_bands(c_test_device, 0, short_buffer.data(), static_cast<int>(short_buffer.size())),
+        "Too-small preset band buffer should fail");
+
+    hsc_free_headsets(c_headsets, c_count);
+    headsetcontrol::enableTestDevice(false);
+
+    std::cout << "    OK equalizer preset consistency" << std::endl;
+}
+
 // ============================================================================
 // Test Runner
 // ============================================================================
@@ -594,6 +676,7 @@ void runAllLibraryApiTests()
     runTest("Device count consistency", testDeviceCountConsistency);
     runTest("Device names consistency", testDeviceNamesConsistency);
     runTest("Vendor/product names", testVendorProductNames);
+    runTest("Equalizer preset consistency", testEqualizerPresetConsistency);
 
     std::cout << "\n=== Test Device Mode Tests ===" << std::endl;
     runTest("C++ test device mode", testCppTestDeviceMode);

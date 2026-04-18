@@ -325,6 +325,39 @@ HSC_API hsc_result_t hsc_set_equalizer(hsc_headset_t headset, const float* bands
  */
 HSC_API int hsc_get_equalizer_presets_count(hsc_headset_t headset);
 
+/**
+ * @brief Get equalizer preset name
+ *
+ * @param headset Headset handle
+ * @param preset Preset index
+ * @return Preset name (do not free), or NULL if unavailable
+ */
+HSC_API const char* hsc_get_equalizer_preset_name(hsc_headset_t headset, int preset);
+
+/**
+ * @brief Get equalizer preset band count
+ *
+ * @param headset Headset handle
+ * @param preset Preset index
+ * @return Number of bands in the preset, or 0 if unavailable
+ */
+HSC_API int hsc_get_equalizer_preset_band_count(hsc_headset_t headset, int preset);
+
+/**
+ * @brief Copy equalizer preset bands into caller-provided buffer
+ *
+ * @param headset Headset handle
+ * @param preset Preset index
+ * @param[out] bands Buffer receiving band values
+ * @param num_bands Number of elements available in bands
+ * @return HSC_RESULT_OK on success, negative error code on failure
+ */
+HSC_API hsc_result_t hsc_get_equalizer_preset_bands(
+    hsc_headset_t headset,
+    int preset,
+    float* bands,
+    int num_bands);
+
 /* ============================================================================
  * Microphone
  * ============================================================================ */

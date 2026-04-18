@@ -17,6 +17,7 @@ struct HeadsetWrapper {
     std::string name_str; // Persistent storage for C string
     std::string vendor_name_str;
     std::string product_name_str;
+    std::optional<EqualizerPresets> equalizer_presets_cache;
 
     explicit HeadsetWrapper(headsetcontrol::Headset&& h)
         : headset(std::move(h))
@@ -68,6 +69,19 @@ hsc_result_t toErrorCode(const headsetcontrol::DeviceError& error)
 // Version string storage (lazily initialized)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::string g_version_str;
+
+const EqualizerPresets* getCachedEqualizerPresets(HeadsetWrapper& wrapper)
+{
+    if (!wrapper.equalizer_presets_cache.has_value()) {
+        wrapper.equalizer_presets_cache = wrapper.headset.getEqualizerPresets();
+    }
+
+    if (!wrapper.equalizer_presets_cache.has_value()) {
+        return nullptr;
+    }
+
+    return &(*wrapper.equalizer_presets_cache);
+}
 
 } // namespace
 
@@ -324,6 +338,65 @@ int hsc_get_equalizer_presets_count(hsc_headset_t headset)
         return 0;
     }
     return static_cast<HeadsetWrapper*>(headset)->headset.getEqualizerPresetsCount();
+}
+
+const char* hsc_get_equalizer_preset_name(hsc_headset_t headset, int preset)
+{
+    if (!headset || preset < 0) {
+        return nullptr;
+    }
+
+    auto& wrapper = *static_cast<HeadsetWrapper*>(headset);
+    const auto* presets = getCachedEqualizerPresets(wrapper);
+    if (!presets || preset >= static_cast<int>(presets->presets.size())) {
+        return nullptr;
+    }
+
+    return presets->presets[static_cast<size_t>(preset)].name.c_str();
+}
+
+int hsc_get_equalizer_preset_band_count(hsc_headset_t headset, int preset)
+{
+    if (!headset || preset < 0) {
+        return 0;
+    }
+
+    auto& wrapper = *static_cast<HeadsetWrapper*>(headset);
+    const auto* presets = getCachedEqualizerPresets(wrapper);
+    if (!presets || preset >= static_cast<int>(presets->presets.size())) {
+        return 0;
+    }
+
+    return static_cast<int>(presets->presets[static_cast<size_t>(preset)].values.size());
+}
+
+hsc_result_t hsc_get_equalizer_preset_bands(
+    hsc_headset_t headset,
+    int preset,
+    float* bands,
+    int num_bands)
+{
+    if (!headset || !bands || preset < 0 || num_bands <= 0) {
+        return HSC_RESULT_INVALID_PARAM;
+    }
+
+    auto& wrapper = *static_cast<HeadsetWrapper*>(headset);
+    const auto* presets = getCachedEqualizerPresets(wrapper);
+    if (!presets) {
+        return HSC_RESULT_NOT_SUPPORTED;
+    }
+
+    if (preset >= static_cast<int>(presets->presets.size())) {
+        return HSC_RESULT_INVALID_PARAM;
+    }
+
+    const auto& values = presets->presets[static_cast<size_t>(preset)].values;
+    if (num_bands < static_cast<int>(values.size())) {
+        return HSC_RESULT_INVALID_PARAM;
+    }
+
+    std::memcpy(bands, values.data(), values.size() * sizeof(float));
+    return HSC_RESULT_OK;
 }
 
 // ============================================================================

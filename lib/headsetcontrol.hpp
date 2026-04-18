@@ -184,6 +184,11 @@ public:
      */
     [[nodiscard]] uint8_t getEqualizerPresetsCount() const;
 
+    /**
+     * @brief Get equalizer preset definitions
+     */
+    [[nodiscard]] std::optional<EqualizerPresets> getEqualizerPresets() const;
+
     // ========================================================================
     // Microphone
     // ========================================================================
