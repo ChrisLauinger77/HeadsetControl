@@ -209,6 +209,9 @@ void testLookupLogitechProX2Lightspeed()
     auto* device = registry.getDevice(0x046d, 0x0af7);
     ASSERT_NOT_NULL(device, "Logitech PRO X2 LIGHTSPEED should be found");
     ASSERT_EQ("Logitech G PRO X 2 LIGHTSPEED", std::string(device->getDeviceName()), "Device name should match");
+    ASSERT_TRUE((device->getCapabilities() & B(CAP_SIDETONE)) != 0, "G PRO X2 should expose sidetone capability");
+    ASSERT_TRUE((device->getCapabilities() & B(CAP_EQUALIZER)) != 0, "G PRO X2 should expose equalizer capability");
+    ASSERT_TRUE((device->getCapabilities() & B(CAP_PARAMETRIC_EQUALIZER)) != 0, "G PRO X2 should expose parametric equalizer capability");
 
     std::cout << "    OK lookup Logitech PRO X2 LIGHTSPEED" << std::endl;
 }

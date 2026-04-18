@@ -12,6 +12,7 @@
 #include "device.hpp"
 #include "devices/corsair_device.hpp"
 #include "devices/logitech_gpro_x2_lightspeed.hpp"
+#include "devices/protocols/logitech_centurion_protocol.hpp"
 #include "devices/protocols/hidpp_protocol.hpp"
 #include "devices/protocols/logitech_calibrations.hpp"
 #include "devices/protocols/steelseries_protocol.hpp"
@@ -335,6 +336,43 @@ void testLogitechProX2BatteryOutOfRange()
     std::cout << "    [OK] Logitech PRO X2 battery out-of-range rejection verified" << std::endl;
 }
 
+void testCenturionFrameBuilding()
+{
+    std::cout << "  Testing Logitech Centurion frame building..." << std::endl;
+
+    std::array<uint8_t, 3> payload { 0x02, 0x11, 0x99 };
+    auto frame = protocols::LogitechCenturionProtocol::buildCenturionFrame(payload);
+
+    ASSERT_EQ(0x51, frame[0], "Centurion frame should start with report ID 0x51");
+    ASSERT_EQ(4, frame[1], "CPL length should include the flags byte");
+    ASSERT_EQ(0, frame[2], "Single-frame requests should have flags 0");
+    ASSERT_EQ(0x02, frame[3], "Payload should start at byte 3");
+    ASSERT_EQ(0x99, frame[5], "Payload bytes should be copied unchanged");
+
+    std::cout << "    [OK] Logitech Centurion frame building verified" << std::endl;
+}
+
+void testCenturionBridgeResponseParsing()
+{
+    std::cout << "  Testing Logitech Centurion bridge response parsing..." << std::endl;
+
+    std::array<uint8_t, 9> reply { 0x07, 0x10, 0x00, 0x05, 0x00, 0x04, 0x20, 0x2A, 0xF8 };
+    ASSERT_TRUE(protocols::LogitechCenturionProtocol::isBridgeResponseFor(reply, 0x04), "Bridge event should match the requested sub-feature index");
+
+    auto parsed = protocols::LogitechCenturionProtocol::parseBridgeResponse(reply);
+    ASSERT_TRUE(parsed.hasValue(), "Valid bridge response should parse successfully");
+    ASSERT_EQ(2, static_cast<int>(parsed->size()), "Bridge response should return only sub-device payload bytes");
+    ASSERT_EQ(0x2A, (*parsed)[0], "Parsed payload should preserve the first response byte");
+    ASSERT_EQ(0xF8, (*parsed)[1], "Parsed payload should preserve the second response byte");
+
+    std::array<uint8_t, 9> error_reply { 0x07, 0x10, 0x00, 0x05, 0x00, 0xFF, 0x04, 0x20, 0x01 };
+    ASSERT_TRUE(protocols::LogitechCenturionProtocol::isBridgeResponseFor(error_reply, 0x04), "Error bridge response should still match the requested sub-feature index");
+    auto error_parse = protocols::LogitechCenturionProtocol::parseBridgeResponse(error_reply);
+    ASSERT_TRUE(!error_parse.hasValue(), "Sub-device error responses should fail parsing");
+
+    std::cout << "    [OK] Logitech Centurion bridge response parsing verified" << std::endl;
+}
+
 // ============================================================================
 // SteelSeries Protocol Tests
 // ============================================================================
@@ -583,6 +621,8 @@ void runAllProtocolTests()
     runTest("Logitech PRO X2 Battery Parsing", testLogitechProX2BatteryPacketParsing);
     runTest("Logitech PRO X2 Power Event", testLogitechProX2PowerEventDetection);
     runTest("Logitech PRO X2 Battery Out-of-Range", testLogitechProX2BatteryOutOfRange);
+    runTest("Logitech Centurion Frame Building", testCenturionFrameBuilding);
+    runTest("Logitech Centurion Bridge Parsing", testCenturionBridgeResponseParsing);
 
     std::cout << "\n=== SteelSeries Protocol ===" << std::endl;
     runTest("SteelSeries Packet Sizes", testSteelSeriesPacketSizes);
