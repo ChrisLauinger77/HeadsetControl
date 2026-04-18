@@ -336,6 +336,28 @@ void testLogitechProX2BatteryOutOfRange()
     std::cout << "    [OK] Logitech PRO X2 battery out-of-range rejection verified" << std::endl;
 }
 
+void testLogitechProX2CenturionBatteryParsing()
+{
+    std::cout << "  Testing Logitech PRO X2 Centurion battery parsing..." << std::endl;
+
+    std::array<uint8_t, 3> charging { 87, 87, 0x02 };
+    auto charging_result = LogitechGProX2Lightspeed::parseCenturionBatteryResponse(charging);
+    ASSERT_TRUE(charging_result.hasValue(), "Centurion charging response should parse successfully");
+    ASSERT_EQ(87, charging_result->level_percent, "Centurion battery percentage should use byte 0");
+    ASSERT_EQ(BATTERY_CHARGING, charging_result->status, "Centurion charging state 0x02 should map to charging");
+
+    std::array<uint8_t, 3> full { 100, 100, 0x03 };
+    auto full_result = LogitechGProX2Lightspeed::parseCenturionBatteryResponse(full);
+    ASSERT_TRUE(full_result.hasValue(), "Centurion full response should parse successfully");
+    ASSERT_EQ(BATTERY_AVAILABLE, full_result->status, "Centurion full state should map to available");
+
+    std::array<uint8_t, 1> invalid { 101 };
+    auto invalid_result = LogitechGProX2Lightspeed::parseCenturionBatteryResponse(invalid);
+    ASSERT_TRUE(!invalid_result.hasValue(), "Centurion battery level above 100 should be rejected");
+
+    std::cout << "    [OK] Logitech PRO X2 Centurion battery parsing verified" << std::endl;
+}
+
 void testCenturionFrameBuilding()
 {
     std::cout << "  Testing Logitech Centurion frame building..." << std::endl;
@@ -371,6 +393,29 @@ void testCenturionBridgeResponseParsing()
     ASSERT_TRUE(!error_parse.hasValue(), "Sub-device error responses should fail parsing");
 
     std::cout << "    [OK] Logitech Centurion bridge response parsing verified" << std::endl;
+}
+
+void testLogitechProX2OnboardEqPayloadBuilding()
+{
+    std::cout << "  Testing Logitech PRO X2 onboard EQ payload building..." << std::endl;
+
+    auto payload = LogitechGProX2Lightspeed::buildOnboardEqPayloadForTest(0x00, {
+        { 80, 4, 1 },
+        { 240, 2, 1 },
+        { 750, 0, 1 },
+        { 2200, 0, 1 },
+        { 6600, 0, 1 },
+    });
+
+    ASSERT_TRUE(payload.size() > 32, "Onboard EQ payload should include coefficient sections");
+    ASSERT_EQ(0x00, payload[0], "Onboard EQ payload should start with slot 0");
+    ASSERT_EQ(5, payload[1], "Onboard EQ payload should encode the band count");
+    ASSERT_EQ(0x00, payload[2], "First band frequency high byte should be preserved");
+    ASSERT_EQ(80, payload[3], "First band frequency low byte should be preserved");
+    ASSERT_EQ(4, payload[4], "First band gain should be preserved");
+    ASSERT_EQ(1, payload[5], "First band Q should be preserved");
+
+    std::cout << "    [OK] Logitech PRO X2 onboard EQ payload building verified" << std::endl;
 }
 
 // ============================================================================
@@ -621,8 +666,10 @@ void runAllProtocolTests()
     runTest("Logitech PRO X2 Battery Parsing", testLogitechProX2BatteryPacketParsing);
     runTest("Logitech PRO X2 Power Event", testLogitechProX2PowerEventDetection);
     runTest("Logitech PRO X2 Battery Out-of-Range", testLogitechProX2BatteryOutOfRange);
+    runTest("Logitech PRO X2 Centurion Battery", testLogitechProX2CenturionBatteryParsing);
     runTest("Logitech Centurion Frame Building", testCenturionFrameBuilding);
     runTest("Logitech Centurion Bridge Parsing", testCenturionBridgeResponseParsing);
+    runTest("Logitech PRO X2 Onboard EQ Payload", testLogitechProX2OnboardEqPayloadBuilding);
 
     std::cout << "\n=== SteelSeries Protocol ===" << std::endl;
     runTest("SteelSeries Packet Sizes", testSteelSeriesPacketSizes);

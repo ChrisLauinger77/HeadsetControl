@@ -15,7 +15,10 @@ enum class CenturionFeature : uint16_t {
     Root                  = 0x0000,
     FeatureSet            = 0x0001,
     CenturionBridge       = 0x0003,
+    CenturionBatterySoc   = 0x0104,
+    CenturionAutoSleep    = 0x0108,
     HeadsetAdvancedParaEQ = 0x020d,
+    HeadsetOnboardEQ      = 0x0636,
     HeadsetAudioSidetone  = 0x0604,
 };
 
@@ -33,6 +36,7 @@ protected:
     static constexpr uint8_t BRIDGE_SEND_FRAGMENT_FN  = 0x10;
     static constexpr uint8_t BRIDGE_MESSAGE_EVENT_FN  = 0x10;
     static constexpr size_t MAX_SINGLE_BRIDGE_PAYLOAD = 56;
+    static constexpr size_t MAX_CONTINUATION_PAYLOAD  = 60;
 
     [[nodiscard]] Result<std::vector<uint8_t>> sendCenturionRequest(
         hid_device* device_handle,
@@ -136,6 +140,21 @@ public:
             message[i + 3] = params[i];
         }
 
+        return message;
+    }
+
+    static auto buildBridgeSubMessageVector(
+        uint8_t sub_feature_index,
+        uint8_t function,
+        std::span<const uint8_t> params,
+        uint8_t software_id = SOFTWARE_ID) -> std::vector<uint8_t>
+    {
+        std::vector<uint8_t> message;
+        message.reserve(params.size() + 3);
+        message.push_back(0x00);
+        message.push_back(sub_feature_index);
+        message.push_back(static_cast<uint8_t>((function & 0xF0) | (software_id & 0x0F)));
+        message.insert(message.end(), params.begin(), params.end());
         return message;
     }
 
@@ -287,24 +306,49 @@ private:
             return DeviceError::protocolError("Centurion bridge index not initialized");
         }
 
-        auto sub_message_buffer = buildBridgeSubMessage(sub_feature_index, function, params);
-        const size_t sub_message_size = params.size() + 3;
-        if (sub_message_size > MAX_SINGLE_BRIDGE_PAYLOAD) {
-            return DeviceError::protocolError("Centurion bridge payload exceeds single-frame limit");
-        }
+        auto sub_message = buildBridgeSubMessageVector(sub_feature_index, function, params);
+        const size_t sub_message_size = sub_message.size();
 
-        std::array<uint8_t, 64> layer3 {};
-        layer3[0] = *centurion_bridge_index_;
-        layer3[1] = static_cast<uint8_t>(BRIDGE_SEND_FRAGMENT_FN | SOFTWARE_ID);
-        layer3[2] = static_cast<uint8_t>((sub_message_size >> 8) & 0x0F);
-        layer3[3] = static_cast<uint8_t>(sub_message_size & 0xFF);
-        for (size_t i = 0; i < sub_message_size; ++i) {
-            layer3[i + 4] = sub_message_buffer[i];
-        }
+        std::vector<uint8_t> bridge_prefix {
+            *centurion_bridge_index_,
+            static_cast<uint8_t>(BRIDGE_SEND_FRAGMENT_FN | SOFTWARE_ID),
+            static_cast<uint8_t>((sub_message_size >> 8) & 0x0F),
+            static_cast<uint8_t>(sub_message_size & 0xFF)
+        };
 
-        auto frame = buildCenturionFrame(std::span<const uint8_t>(layer3.data(), sub_message_size + 4));
-        if (auto write_result = this->writeHID(device_handle, frame, frame.size()); !write_result) {
-            return write_result.error();
+        if (sub_message_size <= MAX_SINGLE_BRIDGE_PAYLOAD) {
+            std::vector<uint8_t> layer3 = bridge_prefix;
+            layer3.insert(layer3.end(), sub_message.begin(), sub_message.end());
+
+            auto frame = buildCenturionFrame(layer3);
+            if (auto write_result = this->writeHID(device_handle, frame, frame.size()); !write_result) {
+                return write_result.error();
+            }
+        } else {
+            size_t offset     = 0;
+            uint8_t frag_idx  = 0;
+
+            while (offset < sub_message_size) {
+                const size_t chunk_limit = frag_idx == 0 ? MAX_SINGLE_BRIDGE_PAYLOAD : MAX_CONTINUATION_PAYLOAD;
+                const size_t remaining   = sub_message_size - offset;
+                const size_t chunk_size  = std::min(chunk_limit, remaining);
+                const bool has_more      = (offset + chunk_size) < sub_message_size;
+                const uint8_t flags      = static_cast<uint8_t>((frag_idx << 1) | (has_more ? 0x01 : 0x00));
+
+                std::vector<uint8_t> layer3;
+                if (frag_idx == 0) {
+                    layer3 = bridge_prefix;
+                }
+                layer3.insert(layer3.end(), sub_message.begin() + static_cast<std::ptrdiff_t>(offset), sub_message.begin() + static_cast<std::ptrdiff_t>(offset + chunk_size));
+
+                auto frame = buildCenturionFrame(layer3, flags);
+                if (auto write_result = this->writeHID(device_handle, frame, frame.size()); !write_result) {
+                    return write_result.error();
+                }
+
+                offset += chunk_size;
+                ++frag_idx;
+            }
         }
 
         bool ack_received = false;
