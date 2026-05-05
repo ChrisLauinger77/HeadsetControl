@@ -219,6 +219,17 @@ inline constexpr std::array<CapabilityDescriptor, NUM_CAPABILITIES> CAPABILITY_D
         .min_value   = 0,
         .max_value   = 100,
         .value_hint  = "<0-100>" },
+
+    // CAP_NOISE_FILTER
+    {
+        .cap         = CAP_NOISE_FILTER,
+        .type        = CAPABILITYTYPE_ACTION,
+        .name        = "noise-filter",
+        .short_flag  = "",
+        .description = "Set noise filter level",
+        .min_value   = 0,
+        .max_value   = 2,
+        .value_hint  = "<0|1|2>" },
 } };
 
 /**

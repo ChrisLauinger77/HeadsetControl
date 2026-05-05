@@ -68,7 +68,8 @@ public:
             | B(CAP_VOICE_PROMPTS) | B(CAP_ROTATE_TO_MUTE) | B(CAP_EQUALIZER_PRESET)
             | B(CAP_EQUALIZER) | B(CAP_PARAMETRIC_EQUALIZER)
             | B(CAP_MICROPHONE_MUTE_LED_BRIGHTNESS) | B(CAP_MICROPHONE_VOLUME)
-            | B(CAP_VOLUME_LIMITER) | B(CAP_BT_WHEN_POWERED_ON) | B(CAP_BT_CALL_VOLUME);
+            | B(CAP_VOLUME_LIMITER) | B(CAP_BT_WHEN_POWERED_ON) | B(CAP_BT_CALL_VOLUME)
+            | B(CAP_NOISE_FILTER);
     }
 
     std::optional<EqualizerInfo> getEqualizerInfo() const override
@@ -215,6 +216,15 @@ public:
     Result<BluetoothCallVolumeResult> setBluetoothCallVolume([[maybe_unused]] hid_device* device_handle, uint8_t volume) override
     {
         return BluetoothCallVolumeResult { .volume = volume, .min_volume = 0, .max_volume = 100 };
+    }
+
+    Result<NoiseFilterResult> setNoiseFilter([[maybe_unused]] hid_device* device_handle, uint8_t level) override
+    {
+        if (test_profile == 1) {
+            return DeviceError::hidError("Test error condition");
+        }
+
+        return NoiseFilterResult { .level = level };
     }
 
     Result<NotificationSoundResult> notificationSound([[maybe_unused]] hid_device* device_handle, uint8_t sound_id) override

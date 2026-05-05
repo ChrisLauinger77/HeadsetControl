@@ -332,6 +332,14 @@ inline void FeatureHandlerRegistry::registerAllHandlers()
             return r.error();
         return FeatureOutput::success(r->volume);
     });
+
+    // CAP_NOISE_FILTER
+    registerHandler(CAP_NOISE_FILTER, [](HIDDevice* dev, hid_device* h, const FeatureParam& p) -> Result<FeatureOutput> {
+        auto r = dev->setNoiseFilter(h, detail::getUint8(p));
+        if (r.hasError())
+            return r.error();
+        return FeatureOutput::success(r->level);
+    });
 }
 
 } // namespace headsetcontrol

@@ -54,7 +54,8 @@ extern int hsc_device_timeout;
     X(CAP_MICROPHONE_VOLUME,              "microphone volume",              'o')  \
     X(CAP_VOLUME_LIMITER,                 "volume limiter",                 '\0') \
     X(CAP_BT_WHEN_POWERED_ON,             "bluetooth when powered on",      '\0') \
-    X(CAP_BT_CALL_VOLUME,                 "bluetooth call volume",          '\0')
+    X(CAP_BT_CALL_VOLUME,                 "bluetooth call volume",          '\0') \
+    X(CAP_NOISE_FILTER,                   "microphone noise filter",        '\0')
 
 /** @brief A list of all features settable/queryable for headsets
  *

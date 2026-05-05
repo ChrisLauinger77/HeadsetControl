@@ -302,6 +302,14 @@ public:
         return DeviceError::notSupported("Device does not support Bluetooth call volume");
     }
 
+    /**
+     * @brief Set mic noise filter level
+     */
+    virtual Result<NoiseFilterResult> setNoiseFilter(hid_device*, uint8_t /*level*/)
+    {
+        return DeviceError::notSupported("Device does not support mic noise filtering");
+    }
+
     // ========================================================================
     // C interface conversion
     // ========================================================================

@@ -148,6 +148,7 @@ struct Options {
     std::optional<bool> volume_limiter_enabled;
     std::optional<bool> bt_when_powered_on;
     std::optional<uint8_t> bt_call_volume;
+    std::optional<uint8_t> noise_filter;
 
     // Info requests
     bool request_battery = false;
@@ -212,6 +213,7 @@ std::optional<cli::ParseError> configureParser(cli::ArgumentParser& parser, Opti
         .value('n', "notificate", opts.notification_sound, uint8_t(0), uint8_t(255), "Play notification sound", "SOUNDID")
         .toggle('r', "rotate-to-mute", opts.rotate_to_mute_enabled, "Toggle rotate to mute")
         .value('p', "equalizer-preset", opts.equalizer_preset, uint8_t(0), uint8_t(255), "Set equalizer preset", "PRESET")
+        .long_value("noise-filter", opts.noise_filter, uint8_t(0), uint8_t(2), "Set microphone noise filter level", "LEVEL")
 
         // === Equalizer (custom parsing) ===
         .custom('e', "equalizer", cli::ArgRequirement::Required, [&opts](std::optional<std::string_view> arg) -> std::optional<cli::ParseError> {
@@ -813,7 +815,8 @@ namespace help {
             sections.back()
                 .add('r', "rotate-to-mute", getValueHint(CAP_ROTATE_TO_MUTE), "Mute when boom arm raised", CAP_ROTATE_TO_MUTE)
                 .add("microphone-mute-led-brightness", getValueHint(CAP_MICROPHONE_MUTE_LED_BRIGHTNESS), "Mute LED brightness", CAP_MICROPHONE_MUTE_LED_BRIGHTNESS)
-                .add("microphone-volume", getValueHint(CAP_MICROPHONE_VOLUME), "Microphone gain level", CAP_MICROPHONE_VOLUME);
+                .add("microphone-volume", getValueHint(CAP_MICROPHONE_VOLUME), "Microphone gain level", CAP_MICROPHONE_VOLUME)
+                .add("noise-filter", getValueHint(CAP_NOISE_FILTER), "Microphone noise filter level (0=off, 1=low, 2=high)", CAP_NOISE_FILTER);
 
             // Lights & Audio Cues - value hints from capability descriptors
             sections.push_back({ "LIGHTS & AUDIO CUES", {} });
@@ -910,6 +913,7 @@ struct FeatureParamStorage {
     int bt_call_vol_val      = 0;
     int battery_req          = 0;
     int chatmix_req          = 0;
+    int noise_filter_val     = 0;
 
     // Store copies of complex settings to avoid const_cast
     EqualizerSettings equalizer_settings;
@@ -941,6 +945,8 @@ struct FeatureParamStorage {
             bt_power_val = *opts.bt_when_powered_on ? 1 : 0;
         if (opts.bt_call_volume.has_value())
             bt_call_vol_val = *opts.bt_call_volume;
+        if (opts.noise_filter.has_value())
+            noise_filter_val = *opts.noise_filter;
         battery_req = opts.request_battery ? 1 : 0;
         chatmix_req = opts.request_chatmix ? 1 : 0;
 
@@ -977,7 +983,8 @@ void initializeFeatureRequests(std::vector<DiscoveredDevice>& devices, const Opt
         { CAP_PARAMETRIC_EQUALIZER, CAPABILITYTYPE_ACTION, opts.parametric_equalizer.has_value() ? FeatureParam { g_feature_params.parametric_eq_settings } : FeatureParam { std::monostate {} }, opts.parametric_equalizer.has_value(), {} },
         { CAP_VOLUME_LIMITER, CAPABILITYTYPE_ACTION, g_feature_params.volume_limiter_val, opts.volume_limiter_enabled.has_value(), {} },
         { CAP_BT_WHEN_POWERED_ON, CAPABILITYTYPE_ACTION, g_feature_params.bt_power_val, opts.bt_when_powered_on.has_value(), {} },
-        { CAP_BT_CALL_VOLUME, CAPABILITYTYPE_ACTION, g_feature_params.bt_call_vol_val, opts.bt_call_volume.has_value(), {} }
+        { CAP_BT_CALL_VOLUME, CAPABILITYTYPE_ACTION, g_feature_params.bt_call_vol_val, opts.bt_call_volume.has_value(), {} },
+        { CAP_NOISE_FILTER, CAPABILITYTYPE_ACTION, g_feature_params.noise_filter_val, opts.noise_filter.has_value(), {} }
     };
 
     for (auto& dev : devices) {

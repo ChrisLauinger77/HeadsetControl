@@ -311,6 +311,13 @@ struct BluetoothCallVolumeResult {
 };
 
 /**
+ * @brief Microphone noise filter result
+ */
+struct NoiseFilterResult {
+    uint8_t level; // 0 = off, 1 = low, 2 = high
+};
+
+/**
  * @brief Capability information with details
  */
 struct CapabilityInfo {
